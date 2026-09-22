@@ -1,0 +1,17 @@
+{
+  "name": "telar-leontief",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Simulación del modelo de Leontief como un telar — TP4 de Modelos y Simulación, UNTDF",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "next": "15.1.6",
+    "react": "19.0.0",
+    "react-dom": "19.0.0"
+  }
+}
