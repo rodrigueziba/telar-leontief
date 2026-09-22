@@ -130,11 +130,16 @@ enunciado, así que dan exactos.
 
 | | |
 | --- | --- |
-| Arrastrar la cabeza de un hilo | cambiar su demanda final |
+| Arrastrar un hilo hacia arriba | pedirle más producción (desde cualquier punto del hilo) |
+| Arrastrar un hilo hacia abajo | pedirle menos |
 | Tocar una banda de la tela | saltar a esa pasada |
 | `←` `→` | pasada anterior / siguiente |
 | Tejer desde cero | reproducir la serie completa |
 | Ver planilla | las cuatro matrices con todos los decimales |
+
+Al pasar por encima de un hilo el cursor cambia a una mano abierta y el hilo se ilumina con un
+halo blanco; al agarrarlo, la mano se cierra. Como cada sector es urdimbre y trama a la vez, se
+iluminan los dos hilos del mismo sector.
 
 El **modo planilla** existe por una razón concreta: un profesor tiene que poder leer 366,67 en
 pantalla. Si la pieza fuera sólo la experiencia, dejaría de ser un trabajo práctico.
@@ -164,16 +169,27 @@ y el sonido se pueden probar por separado del render.
 
 ## Diseño
 
-Tintes naturales sobre lino crudo: añil, rubia, gualda, cardenillo y nogal, un tinte por
-sector. Claro y oscuro según la preferencia del sistema. Tipografía Bricolage Grotesque para
-los títulos e IBM Plex Mono para todo dato numérico, porque un patrón de tejido es una grilla
-monoespaciada.
+Tres paletas, seleccionables desde la propia página y recordadas entre visitas. Una paleta no
+son cinco colores: cada una trae además sus propios neutros, afinados para modo claro y para
+modo oscuro, porque cinco acentos saturados sobre el gris equivocado se ven a la vez chillones
+y sin contraste.
 
-Sin glassmorphism: el vidrio esmerilado pelea materialmente con la lana y el lino, y resta
-contraste justo donde hay que leer números. La profundidad se consigue con material — el
-entrelazado pasando por arriba y por abajo, y los anillos apilándose — en vez de con un motor
-3D.
+| Paleta | Para qué |
+| --- | --- |
+| **Viva** (por defecto) | Acentos saturados sobre grafito frío |
+| **Tintes naturales** | Añil, rubia, gualda, cardenillo y nogal sobre lino crudo |
+| **Sin barreras** | Okabe–Ito, distinguible con cualquier tipo de daltonismo |
 
-Responsive hasta ancho de teléfono: en vertical la tela pasa a ser horizontal debajo del
-telar. Respeta `prefers-reduced-motion` (no reproduce la serie sola) y el foco de teclado es
-visible.
+Tipografía Arimo en toda la página, con cifras tabulares donde los números se comparan en
+columna. Prosa justificada con partición de palabras.
+
+Sin glassmorphism: el vidrio esmerilado resta contraste justo donde hay que leer números. La
+profundidad se consigue con material — el entrelazado pasando por arriba y por abajo, y los
+anillos apilándose — en vez de con un motor 3D.
+
+La disposición ocupa siempre el ancho disponible. A partir de 1380 px el inspector pasa a una
+tercera columna, entre el telar y el panel, que es donde su aritmética tiene lugar para
+respirar; por debajo de 900 px todo se apila y la tela rota a horizontal. Las planillas entran
+en dos filas por dos columnas sin barras de desplazamiento, a cualquier ancho.
+
+Respeta `prefers-reduced-motion` (no reproduce la serie sola) y el foco de teclado es visible.

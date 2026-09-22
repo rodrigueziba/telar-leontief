@@ -1,13 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 /*
  * El telar.
  *
  * Cada sector es a la vez urdimbre y trama — aparece como columna cuando
  * consume y como fila cuando provee, que es exactamente lo que es un
- * sector en una tabla insumo-producto.
+ * sector en una tabla insumo-producto. Por eso, al agarrar un hilo, se
+ * iluminan los dos: son el mismo sector.
  *
  *   · grosor del hilo   → producción acumulada del sector (x^0,6, para que
  *                          un sector chico siga siendo visible)
@@ -19,6 +20,7 @@ import { useCallback, useEffect, useRef } from 'react';
  */
 
 const LIMITE_ANILLO = 1.5; // px: por debajo de esto dos capas no se distinguen
+const AGARRE = 24; // px de tolerancia extra para poder agarrar un hilo
 
 function hexARgb(h) {
   const s = h.replace('#', '').trim();
@@ -55,8 +57,10 @@ export default function LoomCanvas({
   acum,
   paso,
   x,
+  y,
   tejiendo,
   pasoMs,
+  paletaId,
   onDemanda,
   rangoY,
 }) {
@@ -64,12 +68,17 @@ export default function LoomCanvas({
   const ladoRef = useRef(0);
   const suaveRef = useRef(null);
   const paletaRef = useRef(null);
-  const arrastreRef = useRef(-1);
   const inicioRef = useRef(0); // cuándo empezó la pasada que se está mostrando
+  const resaltadoRef = useRef(-1);
+  const arrastreRef = useRef(null);
+
+  const [agarrando, setAgarrando] = useState(false);
+  // El ref lo lee el dibujo (fuera de React); el estado mueve el cursor.
+  const [resaltado, setResaltado] = useState(-1);
 
   // Los props que el bucle de dibujo necesita, sin volver a suscribirlo.
   const datos = useRef({});
-  datos.current = { modelo, acum, paso, x, tejiendo, pasoMs, inicioRef };
+  datos.current = { modelo, acum, paso, x, y, tejiendo, pasoMs };
 
   /* ---------------- geometría ---------------- */
 
@@ -94,10 +103,73 @@ export default function LoomCanvas({
   /*
    * El punto de control de la curva está en el medio del eje largo, así que
    * el parámetro de Bézier coincide con la posición normalizada y el desvío
-   * lateral vale 2·t·(1−t)·sag. Cruces y nudos usan la misma cuenta, si no
-   * quedan corridos del hilo.
+   * lateral vale 2·t·(1−t)·sag. Cruces, nudos y detección de toque usan la
+   * misma cuenta, si no quedan corridos del hilo.
    */
   const desvio = (t, sag) => 2 * t * (1 - t) * sag;
+
+  /** Dónde está realmente la urdimbre j a la altura py. */
+  const xDeUrdimbre = useCallback(
+    (j, py, S) => {
+      const { pad, pos } = geom(S, modelo.n);
+      const y0 = pad * 0.66;
+      const y1 = S - pad * 0.66;
+      const d = suaveRef.current || acum[paso];
+      const maxV = Math.max(...x, 1e-9);
+      const { step } = geom(S, modelo.n);
+      const t = Math.min(1, Math.max(0, (py - y0) / (y1 - y0)));
+      return pos(j) + desvio(t, flojedad(d[j], maxV, step));
+    },
+    [geom, modelo.n, acum, paso, x]
+  );
+
+  /** Dónde está realmente la trama i a la abscisa px. */
+  const yDeTrama = useCallback(
+    (i, px, S) => {
+      const { pad, pos, step } = geom(S, modelo.n);
+      const x0 = pad * 0.66;
+      const x1 = S - pad * 0.66;
+      const d = suaveRef.current || acum[paso];
+      const maxV = Math.max(...x, 1e-9);
+      const t = Math.min(1, Math.max(0, (px - x0) / (x1 - x0)));
+      return pos(i) - desvio(t, flojedad(d[i], maxV, step));
+    },
+    [geom, modelo.n, acum, paso, x]
+  );
+
+  /**
+   * Qué sector hay bajo el dedo. Se puede agarrar cualquier punto del hilo,
+   * sea por su urdimbre o por su trama: las dos son el mismo sector.
+   */
+  const sectorEn = useCallback(
+    (px, py) => {
+      const S = ladoRef.current;
+      if (!S) return -1;
+      const { step } = geom(S, modelo.n);
+      const d = suaveRef.current || acum[paso];
+      const maxV = Math.max(...x, 1e-9);
+
+      let mejor = -1;
+      let mejorDist = Infinity;
+
+      for (let j = 0; j < modelo.n; j++) {
+        const tol = grosor(d[j], maxV, step) / 2 + AGARRE;
+
+        const dv = Math.abs(px - xDeUrdimbre(j, py, S));
+        if (dv < tol && dv < mejorDist) {
+          mejor = j;
+          mejorDist = dv;
+        }
+        const dh = Math.abs(py - yDeTrama(j, px, S));
+        if (dh < tol && dh < mejorDist) {
+          mejor = j;
+          mejorDist = dh;
+        }
+      }
+      return mejor;
+    },
+    [geom, modelo.n, acum, paso, x, xDeUrdimbre, yDeTrama]
+  );
 
   /* ---------------- dibujo ---------------- */
 
@@ -106,8 +178,7 @@ export default function LoomCanvas({
     const S = ladoRef.current;
     const P = paletaRef.current;
     const d = suaveRef.current;
-    const { modelo: m, acum: ac, paso: p, x: xf, tejiendo: tj, pasoMs, inicioRef: ini } =
-      datos.current;
+    const { modelo: m, acum: ac, paso: p, x: xf, tejiendo: tj, pasoMs } = datos.current;
     if (!cv || !S || !P || !d || !ac) return;
 
     const ctx = cv.getContext('2d');
@@ -115,6 +186,7 @@ export default function LoomCanvas({
     const { pad, step, pos } = geom(S, n);
     const maxV = Math.max(...xf, 1e-9);
     const tinte = (i) => P.dyes[i % P.dyes.length];
+    const activo = resaltadoRef.current;
 
     ctx.clearRect(0, 0, S, S);
     ctx.fillStyle = P.panel;
@@ -157,6 +229,20 @@ export default function LoomCanvas({
       ctx.quadraticCurveTo((x0 + x1) / 2, Y - sag, x1, Y);
     };
 
+    // El halo del hilo agarrado, por debajo del hilo mismo.
+    const halo = (trazar, ancho) => {
+      ctx.save();
+      ctx.lineCap = 'round';
+      ctx.shadowColor = 'rgba(255,255,255,0.95)';
+      ctx.shadowBlur = 16;
+      ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+      ctx.lineWidth = ancho + 9;
+      trazar();
+      ctx.stroke();
+      ctx.stroke();
+      ctx.restore();
+    };
+
     ctx.lineCap = 'round';
 
     // urdimbre: el sector como consumidor (columna de A)
@@ -164,6 +250,7 @@ export default function LoomCanvas({
       const X = pos(j);
       const sag = flojedad(d[j], maxV, step);
       const cs = capas(j);
+      if (j === activo) halo(() => curvaVertical(X, sag), grosor(d[j], maxV, step));
       cs.forEach((w, idx) => {
         ctx.strokeStyle = mezcla(tinte(j), P.mixer, aclarado(idx, cs.length));
         ctx.lineWidth = idx === 0 ? grosor(d[j], maxV, step) : w;
@@ -177,6 +264,7 @@ export default function LoomCanvas({
       const Y = pos(i);
       const sag = flojedad(d[i], maxV, step);
       const cs = capas(i);
+      if (i === activo) halo(() => curvaHorizontal(Y, sag), grosor(d[i], maxV, step));
       cs.forEach((w, idx) => {
         ctx.strokeStyle = mezcla(tinte(i), P.mixer, aclarado(idx, cs.length));
         ctx.lineWidth = idx === 0 ? grosor(d[i], maxV, step) : w;
@@ -216,14 +304,13 @@ export default function LoomCanvas({
 
     // nudos: z = a·x
     let maxZ = 1e-9;
-    const Z = m.A.map((fila, i) =>
+    const Z = m.A.map((fila) =>
       fila.map((a, j) => {
         const z = a * Math.max(0, d[j]);
         if (Math.abs(z) > maxZ) maxZ = Math.abs(z);
         return z;
       })
     );
-    void Z[0];
 
     for (let i = 0; i < n; i++) {
       for (let j = 0; j < n; j++) {
@@ -244,7 +331,7 @@ export default function LoomCanvas({
         } else {
           const rr = Math.max(r, 4.2);
           ctx.strokeStyle = P.warn;
-          ctx.lineWidth = 1.6;
+          ctx.lineWidth = 1.8;
           ctx.beginPath();
           ctx.ellipse(c.x, c.y, rr, rr * 0.8, 0, 0, Math.PI * 2);
           ctx.stroke();
@@ -256,16 +343,21 @@ export default function LoomCanvas({
       }
     }
 
-    // cabezas de hilo: la zona para agarrar y tirar
+    // etiqueta del sector, arriba de su urdimbre
     for (let j = 0; j < n; j++) {
       const X = pos(j);
-      const bw = Math.min(step * 0.6, 52);
-      const bh = 20;
+      const bw = Math.min(step * 0.62, 56);
+      const bh = 21;
       const by = Math.max(2, pad * 0.45 - bh - 5);
       ctx.fillStyle = tinte(j);
       ctx.fillRect(X - bw / 2, by, bw, bh);
+      if (j === activo) {
+        ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(X - bw / 2 - 1, by - 1, bw + 2, bh + 2);
+      }
       ctx.fillStyle = P.panel;
-      ctx.font = '600 10.5px "IBM Plex Mono", ui-monospace, monospace';
+      ctx.font = '700 11px Arimo, Arial, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(m.nombres[j].slice(0, 3).toUpperCase(), X, by + bh / 2 + 0.5);
@@ -273,7 +365,7 @@ export default function LoomCanvas({
 
     // la lanzadera cruzando
     if (tj) {
-      const avance = Math.min(1, (performance.now() - ini.current) / pasoMs);
+      const avance = Math.min(1, (performance.now() - inicioRef.current) / pasoMs);
       const sx = x0 + avance * (x1 - x0);
       const sy = S - pad * 0.3;
       ctx.fillStyle = P.shuttle;
@@ -287,15 +379,16 @@ export default function LoomCanvas({
     }
   }, [geom]);
 
-  /* ---------------- tamaño ---------------- */
+  /* ---------------- tamaño y tema ---------------- */
 
   const dimensionar = useCallback(() => {
     const cv = cvRef.current;
     if (!cv) return;
     const caja = cv.parentElement;
     const ancho = caja.clientWidth;
+    const alto = caja.clientHeight;
     if (!ancho) return;
-    const S = Math.min(ancho, caja.clientHeight || ancho);
+    const S = Math.min(ancho, alto || ancho);
     ladoRef.current = S;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     cv.width = Math.round(S * dpr);
@@ -324,11 +417,19 @@ export default function LoomCanvas({
     };
   }, [dimensionar, dibujar]);
 
+  // Un cambio de paleta reescribe las variables CSS: hay que releerlas.
+  useEffect(() => {
+    const id = requestAnimationFrame(() => {
+      paletaRef.current = leerPaleta();
+      dibujar();
+    });
+    return () => cancelAnimationFrame(id);
+  }, [paletaId, dibujar]);
+
   /* ---------------- suavizado propio, fuera de React ---------------- */
 
   useEffect(() => {
     let raf = 0;
-
     const bucle = () => {
       raf = requestAnimationFrame(bucle);
       const { acum: ac, paso: p, tejiendo: tj } = datos.current;
@@ -353,12 +454,10 @@ export default function LoomCanvas({
       }
       if (movio || tj) dibujar();
     };
-
     raf = requestAnimationFrame(bucle);
     return () => cancelAnimationFrame(raf);
   }, [dibujar]);
 
-  // Un cambio de ejercicio reinicia el suavizado y redibuja de una.
   useEffect(() => {
     suaveRef.current = null;
     dibujar();
@@ -370,17 +469,7 @@ export default function LoomCanvas({
     dibujar();
   }, [paso, acum, dibujar]);
 
-  /* ---------------- arrastrar un hilo ---------------- */
-
-  const hiloEn = (px, py) => {
-    const S = ladoRef.current;
-    const { pad, step, pos } = geom(S, modelo.n);
-    if (py > pad * 0.45 + step * 0.4) return -1;
-    for (let j = 0; j < modelo.n; j++) {
-      if (Math.abs(px - pos(j)) < step * 0.45) return j;
-    }
-    return -1;
-  };
+  /* ---------------- agarrar y tirar ---------------- */
 
   const aLienzo = (e) => {
     const cv = cvRef.current;
@@ -392,28 +481,50 @@ export default function LoomCanvas({
     };
   };
 
+  const marcar = (j) => {
+    if (resaltadoRef.current === j) return;
+    resaltadoRef.current = j;
+    setResaltado(j);
+    dibujar();
+  };
+
   const onPointerDown = (e) => {
     const { px, py } = aLienzo(e);
-    const j = hiloEn(px, py);
+    const j = sectorEn(px, py);
     if (j < 0) return;
-    arrastreRef.current = j;
+    // Tirar hacia ARRIBA engrosa el hilo, hacia abajo lo afina: se guarda
+    // el punto de partida y se trabaja con el desplazamiento relativo.
+    arrastreRef.current = { j, py0: py, valor0: datos.current.y[j] };
+    marcar(j);
+    setAgarrando(true);
     e.currentTarget.setPointerCapture(e.pointerId);
     e.preventDefault();
   };
 
   const onPointerMove = (e) => {
-    if (arrastreRef.current < 0) return;
-    const { py } = aLienzo(e);
+    const { px, py } = aLienzo(e);
+    const arrastre = arrastreRef.current;
+
+    if (!arrastre) {
+      marcar(sectorEn(px, py));
+      return;
+    }
+
     const S = ladoRef.current;
-    const { pad, inner } = geom(S, modelo.n);
-    const t = Math.min(1, Math.max(0, (py - pad * 0.5) / inner));
-    onDemanda(arrastreRef.current, Math.round(t * rangoY));
+    const { inner } = geom(S, modelo.n);
+    const escala = rangoY / inner;
+    const subido = arrastre.py0 - py; // positivo = tiró hacia arriba
+    const valor = Math.round(
+      Math.min(rangoY, Math.max(0, arrastre.valor0 + subido * escala))
+    );
+    onDemanda(arrastre.j, valor);
     e.preventDefault();
   };
 
   const soltar = (e) => {
-    if (arrastreRef.current < 0) return;
-    arrastreRef.current = -1;
+    if (!arrastreRef.current) return;
+    arrastreRef.current = null;
+    setAgarrando(false);
     try {
       e.currentTarget.releasePointerCapture(e.pointerId);
     } catch {
@@ -421,15 +532,24 @@ export default function LoomCanvas({
     }
   };
 
+  const onPointerLeave = () => {
+    if (arrastreRef.current) return;
+    marcar(-1);
+  };
+
+  const cursor = agarrando ? 'grabbing' : resaltado >= 0 ? 'grab' : 'default';
+
   return (
     <div className="canvas-box">
       <canvas
         ref={cvRef}
-        aria-label="Telar: un hilo por sector, con un anillo por pasada"
+        style={{ cursor }}
+        aria-label="Telar: un hilo por sector. Arrastrá un hilo hacia arriba para pedirle más producción."
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={soltar}
         onPointerCancel={soltar}
+        onPointerLeave={onPointerLeave}
       />
     </div>
   );

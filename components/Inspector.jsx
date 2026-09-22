@@ -53,7 +53,7 @@ export default function Inspector({ modelo, terminos, acum, paso, total, onIr })
       </div>
 
       <div className="insp-body">
-        <p className="insp-lead">
+        <p className="insp-lead just">
           {paso === 0 ? (
             <>
               La primera pasada es la <b>demanda final</b>: lo que se le pide a cada sector desde

@@ -3,11 +3,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MODELOS, nf, suma, sumaAbs, tejer } from '@/lib/leontief';
 import { TelarAudio } from '@/lib/audio';
+import { CLAVE_GUARDADO, PALETA_DEFECTO, PALETAS, aplicarPaleta } from '@/lib/paletas';
 import LoomCanvas from './LoomCanvas';
 import Tela from './Tela';
 import Inspector from './Inspector';
 import Panel from './Panel';
 import Planilla from './Planilla';
+import Paleta from './Paleta';
+import Intro from './Intro';
 
 const PASO_MS = 460;
 const INICIAL = 2; // el ejercicio 3: cuatro sectores, la tela más legible
@@ -19,6 +22,8 @@ export default function Telar() {
   const [reproduciendo, setReproduciendo] = useState(false);
   const [audio, setAudio] = useState(false);
   const [planilla, setPlanilla] = useState(false);
+  const [paleta, setPaleta] = useState(PALETA_DEFECTO);
+  const [esOscuro, setEsOscuro] = useState(false);
 
   const audioRef = useRef(null);
   const reducido = useRef(false);
@@ -32,14 +37,45 @@ export default function Telar() {
   const ultimo = terminos.length - 1;
   const rangoY = Math.max(...modelo.yBase, 50) * 2;
 
+  /* ---------------- arranque ---------------- */
+
   useEffect(() => {
     reducido.current = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     audioRef.current = new TelarAudio();
     const motor = audioRef.current;
+
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const sincronizar = () => setEsOscuro(mq.matches);
+    sincronizar();
+    mq.addEventListener('change', sincronizar);
+
+    let guardada = null;
+    try {
+      guardada = window.localStorage.getItem(CLAVE_GUARDADO);
+    } catch {
+      /* sin almacenamiento: se usa la de defecto */
+    }
+    if (guardada && PALETAS.some((p) => p.id === guardada)) setPaleta(guardada);
+
     return () => {
+      mq.removeEventListener('change', sincronizar);
       motor.apagar();
     };
   }, []);
+
+  // La paleta se escribe en las variables CSS del documento.
+  useEffect(() => {
+    aplicarPaleta(paleta, esOscuro);
+  }, [paleta, esOscuro]);
+
+  const cambiarPaleta = (id) => {
+    setPaleta(id);
+    try {
+      window.localStorage.setItem(CLAVE_GUARDADO, id);
+    } catch {
+      /* no se pudo guardar la preferencia; no es grave */
+    }
+  };
 
   /* ---------------- sonido ---------------- */
 
@@ -102,6 +138,7 @@ export default function Telar() {
   const cambiarDemanda = useCallback((j, valor) => {
     setReproduciendo(false);
     setY((prev) => {
+      if (prev[j] === valor) return prev;
       const siguiente = prev.slice();
       siguiente[j] = valor;
       return siguiente;
@@ -157,20 +194,19 @@ export default function Telar() {
 
   return (
     <div className="wrap">
-      <header>
-        <p className="eyebrow">Modelos y Simulación · UNTDF · TP4</p>
+      <header className="cab">
+        <p className="eyebrow">Modelos y Simulación · UNTDF · Trabajo Práctico 4</p>
         <h1>Telar de Leontief</h1>
-        <p className="lede">
-          Un hilo por sector. Un hilo se mueve por <b>su propia demanda</b> más{' '}
-          <b>lo que lo arrastran los hilos que lo cruzan</b>:{' '}
-          <span className="eq-inline">d = y + A·d</span>. Relajar la tela hasta que deja de moverse
-          no <em>se parece</em> a invertir <span className="eq-inline">(I−A)</span> — es la misma
-          cuenta. Cada pasada de la lanzadera agrega un término de{' '}
-          <span className="eq-inline">I + A + A² + A³ + …</span>
+        <p className="sub">
+          Una economía tejida hilo por hilo. Cada sector es un hilo, y la tela se arma en pasadas
+          sucesivas hasta que deja de moverse: ahí está la respuesta del modelo. Relajar esta tela{' '}
+          <b>no se parece</b> a resolver el sistema — es la misma cuenta.
         </p>
       </header>
 
       <hr className="rule" />
+
+      <Intro />
 
       <nav className="tabs" role="tablist" aria-label="Ejercicios del trabajo práctico">
         {MODELOS.map((m, i) => (
@@ -183,21 +219,23 @@ export default function Telar() {
             onClick={() => cambiarEjercicio(i)}
           >
             <b>Ejercicio {m.ej.id}</b>
-            {m.ej.tab}
+            {m.ej.tab} · {m.ej.titulo}
           </button>
         ))}
       </nav>
 
       <main className="stage">
-        <section>
+        <section className="zona-telar">
           <div className="loom-area">
             <LoomCanvas
               modelo={modelo}
               acum={acum}
               paso={paso}
               x={x}
+              y={y}
               tejiendo={reproduciendo}
               pasoMs={PASO_MS}
+              paletaId={`${paleta}-${esOscuro}`}
               onDemanda={cambiarDemanda}
               rangoY={rangoY}
             />
@@ -228,57 +266,55 @@ export default function Telar() {
             <button type="button" className="act" onClick={() => setPlanilla((v) => !v)}>
               {planilla ? 'Ocultar planilla' : 'Ver planilla'}
             </button>
+            <Paleta actual={paleta} esOscuro={esOscuro} onCambiar={cambiarPaleta} />
           </div>
 
-          <p className="hint">
-            Arrastrá hacia abajo la cabeza de un hilo para cambiarle la demanda final. Tocá una
-            banda de la tela para saltar a esa pasada, o usá las flechas ← →.
+          <p className="hint just">
+            <b>Agarrá cualquier punto de un hilo</b> y tiralo hacia arriba para pedirle más
+            producción, o hacia abajo para pedirle menos; el hilo se ilumina cuando está tomado.
+            Tocá una banda de la tela para saltar a esa pasada, o movete con las flechas ← →.
             {audio && (
               <>
                 {' '}
-                Con el sonido activo, el volumen de cada golpe es lo que esa pasada aportó: la serie
-                se apaga y se escucha apagarse.
+                Con el sonido activo, el volumen de cada golpe es lo que esa pasada aportó: la
+                serie se apaga y se escucha apagarse.
               </>
             )}
           </p>
         </section>
 
-        <aside>
-          <Panel
+        <div className="zona-insp">
+          <Inspector
             modelo={modelo}
             terminos={terminos}
             acum={acum}
             paso={paso}
-            x={x}
-            y={y}
+            total={total}
+            onIr={irA}
           />
+        </div>
+
+        <aside className="zona-panel">
+          <Panel modelo={modelo} terminos={terminos} acum={acum} paso={paso} x={x} y={y} />
         </aside>
       </main>
-
-      <Inspector
-        modelo={modelo}
-        terminos={terminos}
-        acum={acum}
-        paso={paso}
-        total={total}
-        onIr={irA}
-      />
 
       {planilla && <Planilla modelo={modelo} x={x} y={y} />}
 
       <footer>
-        <p>
-          El grosor del hilo va como <code>x^0,6</code> para que un sector chico siga siendo visible
-          al lado de uno grande; los números del panel y de la planilla son exactos, sin escalar.
-          Cada <b>anillo</b> dentro de un hilo es una pasada: el núcleo es la demanda final y cada
-          capa más clara es una vuelta más por la cadena de insumos.
+        <p className="just">
+          El grosor del hilo va como <span className="formula">x^0,6</span> para que un sector
+          chico siga siendo visible al lado de uno grande; los números del panel y de la planilla
+          son exactos, sin escalar. Cada <b>anillo</b> dentro de un hilo es una pasada: el núcleo
+          es la demanda final y cada capa más clara es una vuelta más por la cadena de insumos.
         </p>
-        <p>
-          El bulto de cada cruce es <code>z_ij = a_ij · x_j</code>, el insumo que el sector{' '}
-          <em>i</em> le entrega al <em>j</em>. La suma de todos los bultos da el consumo intermedio
-          total ({nf(total - suma(y))} en este ejercicio). En los ejercicios 2 y 4 el enunciado da{' '}
-          <code>(I−A)⁻¹</code> ya invertida, así que la matriz técnica se recupera como{' '}
-          <code>A = I − L⁻¹</code> para poder tejerla.
+        <p className="just">
+          El bulto de cada cruce es <span className="formula">z(i,j) = a(i,j) · x(j)</span>, el
+          insumo que el sector <em>i</em> le entrega al <em>j</em>. La suma de todos los bultos da
+          el consumo intermedio total, que en este ejercicio es {nf(total - suma(y))}. En los
+          ejercicios 2 y 4 el enunciado da <span className="formula">(I−A)⁻¹</span> ya invertida,
+          así que la matriz técnica se recupera como{' '}
+          <span className="formula">A = I − L⁻¹</span> para poder tejerla.
         </p>
       </footer>
     </div>

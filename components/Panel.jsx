@@ -35,7 +35,7 @@ export default function Panel({ modelo, terminos, acum, paso, x, y }) {
               <span className="sw" style={{ background: `var(--dye-${(i % 5) + 1})` }} />
               <span className="nm">{nm}</span>
               <span className="val">{nf(acumulado[i])}</span>
-              <span className="sub">
+              <span className="subv">
                 +{nf(termino[i])} en esta pasada · final {nf(x[i])}
               </span>
             </li>
@@ -55,7 +55,7 @@ export default function Panel({ modelo, terminos, acum, paso, x, y }) {
         </dl>
 
         {peor && (
-          <p className="note">
+          <p className="note just">
             <b>{modelo.negativos.length} cruces tachados en rojo.</b> La (I−A)⁻¹ del enunciado
             devuelve coeficientes negativos (el menor, {nf(peor.valor, 4)}). Un insumo negativo no
             existe: ese hilo empujaría en vez de tirar. La matriz está redondeada, no construida

@@ -10,8 +10,8 @@ export const viewport = {
   width: 'device-width',
   initialScale: 1,
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#e4ded0' },
-    { media: '(prefers-color-scheme: dark)', color: '#191512' },
+    { media: '(prefers-color-scheme: light)', color: '#e9ecf2' },
+    { media: '(prefers-color-scheme: dark)', color: '#0e1116' },
   ],
 };
 
@@ -23,7 +23,7 @@ export default function RootLayout({ children }) {
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
           rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Arimo:ital,wght@0,400;0,500;0,600;0,700;1,400;1,700&display=swap"
         />
       </head>
       <body>{children}</body>
