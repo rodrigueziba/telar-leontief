@@ -199,8 +199,7 @@ export default function Telar() {
         <h1>Telar de Leontief</h1>
         <p className="sub">
           Una economía tejida hilo por hilo. Cada sector es un hilo, y la tela se arma en pasadas
-          sucesivas hasta que deja de moverse: ahí está la respuesta del modelo. Relajar esta tela{' '}
-          <b>no se parece</b> a resolver el sistema — es la misma cuenta.
+          sucesivas hasta que deja de moverse: ahí está la respuesta del modelo.
         </p>
       </header>
 

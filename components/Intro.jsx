@@ -42,7 +42,7 @@ export default function Intro() {
 
       <article className="paso" style={{ '--acento': 'var(--dye-3)' }}>
         <h3>
-          <span>03</span>Qué podés tocar
+          <span>03</span>Qué podés modificar
         </h3>
         <p className="just">
           Apretá <b>Tejer desde cero</b> y mirá cómo se arma la tela pasada por pasada.{' '}
@@ -51,7 +51,7 @@ export default function Intro() {
         </p>
         <p className="just">
           A la derecha, cada banda de «la tela» es una pasada y su alto es cuánto aportó. Tocá una
-          para saltar a ella y ver la cuenta exacta abajo.
+          para ver su resultado y la cuenta exacta abajo.
         </p>
       </article>
     </section>
