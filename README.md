@@ -11,32 +11,12 @@ Stack: **Next.js 15 (App Router) + React 19 + Web Audio API**. Sin dependencias 
 
 ---
 
-## Correrlo
+## Ejecutarlo
 
 ```bash
 npm install
 npm run dev      # http://localhost:3000
 ```
-
-## Subirlo a Vercel
-
-```bash
-git remote add origin git@github.com:rodrigueziba/telar-leontief.git
-git push -u origin main
-```
-
-Después, en vercel.com: *Add New → Project → Import*. Vercel detecta Next.js solo. No hay
-variables de entorno ni configuración adicional.
-
-Desde la terminal, alternativamente:
-
-```bash
-npm i -g vercel
-vercel        # preview
-vercel --prod # producción
-```
-
----
 
 ## La equivalencia
 
